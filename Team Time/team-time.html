@@ -1,0 +1,919 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Team Time</title>
+    <style>
+      :root {
+        --bg-a: #111827;
+        --bg-b: #1d4ed8;
+        --bg-c: #0f766e;
+        --panel: rgba(255, 255, 255, 0.92);
+        --panel-soft: rgba(255, 255, 255, 0.78);
+        --ink: #102033;
+        --muted: #4d647c;
+        --accent: #f59e0b;
+        --accent-2: #22c55e;
+        --accent-3: #ec4899;
+        --line: rgba(16, 32, 51, 0.12);
+        --shadow: 0 20px 50px rgba(0, 0, 0, 0.24);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        font-family: Inter, "Segoe UI", Helvetica, Arial, sans-serif;
+        color: var(--ink);
+        background:
+          radial-gradient(circle at top left, rgba(236, 72, 153, 0.24), transparent 30%),
+          radial-gradient(circle at top right, rgba(245, 158, 11, 0.24), transparent 26%),
+          linear-gradient(145deg, var(--bg-a), var(--bg-b) 55%, var(--bg-c));
+      }
+
+      .shell {
+        width: min(1100px, calc(100vw - 32px));
+        margin: 32px auto;
+      }
+
+      .hero {
+        color: #f8fbff;
+        padding: 20px 0 12px;
+      }
+
+      .kicker {
+        margin: 0 0 8px;
+        text-transform: uppercase;
+        letter-spacing: 0.2em;
+        font-size: 0.76rem;
+        color: #dbeafe;
+        font-weight: 700;
+      }
+
+      h1 {
+        margin: 0;
+        font-size: clamp(2rem, 5vw, 4rem);
+        line-height: 0.98;
+      }
+
+      .subtitle {
+        max-width: 72ch;
+        margin: 14px 0 0;
+        color: #dbeafe;
+        font-size: 1.05rem;
+        line-height: 1.55;
+      }
+
+      .grid {
+        display: grid;
+        gap: 18px;
+        grid-template-columns: repeat(12, minmax(0, 1fr));
+        margin-top: 22px;
+      }
+
+      .presenter-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 10px 14px;
+        border-radius: 999px;
+        background: linear-gradient(135deg, rgba(245, 158, 11, 0.24), rgba(236, 72, 153, 0.18));
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        color: #102033;
+        font-weight: 800;
+        box-shadow: 0 12px 24px rgba(0, 0, 0, 0.16);
+        white-space: nowrap;
+      }
+
+      .view-toggle {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        border: 0;
+        border-radius: 999px;
+        padding: 12px 16px;
+        font: inherit;
+        font-weight: 800;
+        color: #102033;
+        cursor: pointer;
+        background: linear-gradient(135deg, #fef3c7, #dbeafe);
+        box-shadow: 0 12px 24px rgba(0, 0, 0, 0.16);
+      }
+
+      .presenter-unlock {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px;
+        margin-top: 12px;
+      }
+
+      .presenter-unlock[hidden] { display: none; }
+
+      .presenter-unlock label { font-weight: 700; }
+
+      .presenter-unlock input {
+        min-width: 150px;
+        padding: 10px 12px;
+        border: 1px solid rgba(255, 255, 255, 0.5);
+        border-radius: 10px;
+        background: rgba(255, 255, 255, 0.94);
+        color: var(--ink);
+        font: inherit;
+      }
+
+      .presenter-unlock button {
+        border: 0;
+        border-radius: 10px;
+        padding: 10px 14px;
+        color: var(--ink);
+        font: inherit;
+        font-weight: 800;
+        cursor: pointer;
+        background: linear-gradient(135deg, var(--accent), #ffd166);
+      }
+
+      .unlock-message { margin: 0; color: #fecaca; font-weight: 700; }
+
+      body.audience-mode .presenter-backstage {
+        display: none;
+      }
+
+      body.audience-mode .hero {
+        align-items: center;
+      }
+
+      body.audience-mode .presenter-badge {
+        background: linear-gradient(135deg, rgba(34, 197, 94, 0.26), rgba(14, 165, 233, 0.18));
+      }
+
+      .card {
+        background: var(--panel);
+        border: 1px solid rgba(255, 255, 255, 0.34);
+        border-radius: 22px;
+        box-shadow: var(--shadow);
+        backdrop-filter: blur(10px);
+      }
+
+      .card.pad {
+        padding: 20px;
+      }
+
+      .wide {
+        grid-column: span 12;
+      }
+
+      .half {
+        grid-column: span 6;
+      }
+
+      .third {
+        grid-column: span 4;
+      }
+
+      .section-title {
+        margin: 0 0 10px;
+        font-size: 1.1rem;
+      }
+
+      .section-copy {
+        margin: 0;
+        color: var(--muted);
+        line-height: 1.55;
+      }
+
+      .chip-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-top: 14px;
+      }
+
+      .chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 10px 14px;
+        border-radius: 999px;
+        font-size: 0.9rem;
+        font-weight: 700;
+        color: #13213a;
+        background: linear-gradient(135deg, #fff7ed, #e0f2fe);
+        border: 1px solid var(--line);
+      }
+
+      .accent {
+        background: linear-gradient(135deg, rgba(245, 158, 11, 0.25), rgba(236, 72, 153, 0.18));
+      }
+
+      .accent-green {
+        background: linear-gradient(135deg, rgba(34, 197, 94, 0.26), rgba(14, 165, 233, 0.18));
+      }
+
+      .panel-list {
+        display: grid;
+        gap: 12px;
+        margin-top: 14px;
+      }
+
+      .setup-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 18px;
+      }
+
+      .presenter-grid {
+        display: grid;
+        grid-template-columns: 1.1fr 0.9fr;
+        gap: 18px;
+      }
+
+      .participant-screen {
+        display: grid;
+        gap: 18px;
+      }
+
+      body.audience-mode .participant-hidden {
+        display: none;
+      }
+
+      body.audience-mode .participant-screen {
+        grid-template-columns: 1fr;
+      }
+
+      .stack {
+        display: grid;
+        gap: 12px;
+      }
+
+      .field-group {
+        display: grid;
+        gap: 10px;
+      }
+
+      .field-group label {
+        font-weight: 700;
+        color: #13213a;
+      }
+
+      .field-row {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 10px;
+      }
+
+      .field-row input,
+      .guess-controls input,
+      .guess-controls select {
+        width: 100%;
+        padding: 12px 14px;
+        border-radius: 14px;
+        border: 1px solid rgba(16, 32, 51, 0.18);
+        background: rgba(255, 255, 255, 0.94);
+        color: var(--ink);
+        font: inherit;
+      }
+
+      .field-row button,
+      .guess-controls button {
+        border: 0;
+        border-radius: 14px;
+        padding: 12px 16px;
+        font: inherit;
+        font-weight: 800;
+        color: #102033;
+        cursor: pointer;
+        background: linear-gradient(135deg, var(--accent), #ffd166);
+        box-shadow: 0 12px 24px rgba(245, 158, 11, 0.22);
+      }
+
+      .field-row button.secondary,
+      .guess-controls button.secondary {
+        background: linear-gradient(135deg, var(--accent-2), #86efac);
+        box-shadow: 0 12px 24px rgba(34, 197, 94, 0.18);
+      }
+
+      .mini-list {
+        display: grid;
+        gap: 10px;
+      }
+
+      .mini-entry {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        align-items: center;
+        padding: 12px 14px;
+        border-radius: 14px;
+        background: rgba(255, 255, 255, 0.7);
+        border: 1px solid var(--line);
+      }
+
+      .mini-entry strong {
+        display: block;
+      }
+
+      .mini-entry span {
+        color: var(--muted);
+        font-size: 0.9rem;
+      }
+
+      .mini-entry-actions {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+
+      .delete-entry {
+        border: 1px solid #ef4444;
+        border-radius: 8px;
+        padding: 6px 10px;
+        background: #fff;
+        color: #b91c1c;
+        font: inherit;
+        font-size: 0.85rem;
+        font-weight: 700;
+        cursor: pointer;
+      }
+
+      .guess-wall {
+        display: grid;
+        gap: 12px;
+      }
+
+      .current-fact {
+        display: grid;
+        gap: 12px;
+        padding: 16px;
+        border-radius: 18px;
+        background: linear-gradient(135deg, rgba(255, 255, 255, 0.92), rgba(255, 255, 255, 0.72));
+        border: 1px solid var(--line);
+      }
+
+      .current-fact-label {
+        margin: 0;
+        text-transform: uppercase;
+        letter-spacing: 0.18em;
+        font-size: 0.72rem;
+        color: #6b7280;
+        font-weight: 800;
+      }
+
+      .current-fact-text {
+        margin: 0;
+        font-size: clamp(1.2rem, 3vw, 1.8rem);
+        line-height: 1.15;
+        font-weight: 800;
+        color: #13213a;
+      }
+
+      .presenter-toolbar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+      }
+
+      .presenter-toolbar button {
+        border: 0;
+        border-radius: 14px;
+        padding: 12px 16px;
+        font: inherit;
+        font-weight: 800;
+        color: #102033;
+        cursor: pointer;
+        background: linear-gradient(135deg, var(--accent), #ffd166);
+        box-shadow: 0 12px 24px rgba(245, 158, 11, 0.22);
+      }
+
+      .presenter-toolbar button.secondary {
+        background: linear-gradient(135deg, var(--accent-2), #86efac);
+        box-shadow: 0 12px 24px rgba(34, 197, 94, 0.18);
+      }
+
+      .presenter-code-input {
+        min-width: 150px;
+        padding: 10px 12px;
+        border: 1px solid rgba(16, 32, 51, 0.18);
+        border-radius: 10px;
+        background: rgba(255, 255, 255, 0.94);
+        color: var(--ink);
+        font: inherit;
+      }
+
+      .guess-controls {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 10px;
+      }
+
+      .cloud {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        min-height: 72px;
+      }
+
+      .cloud .chip {
+        transition: transform 160ms ease, box-shadow 160ms ease;
+      }
+
+      .cloud .chip:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 10px 20px rgba(16, 32, 51, 0.12);
+      }
+
+      .note {
+        margin: 0;
+        color: var(--muted);
+        font-size: 0.95rem;
+        line-height: 1.5;
+      }
+
+      .panel-item {
+        background: var(--panel-soft);
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        padding: 14px 16px;
+      }
+
+      .panel-item h3 {
+        margin: 0 0 6px;
+        font-size: 1rem;
+      }
+
+      .panel-item p {
+        margin: 0;
+        color: var(--muted);
+        line-height: 1.5;
+      }
+
+      .timeline {
+        display: grid;
+        gap: 12px;
+      }
+
+      .timeline-step {
+        display: grid;
+        grid-template-columns: 56px 1fr;
+        gap: 12px;
+        align-items: center;
+        padding: 14px;
+        border-radius: 18px;
+        background: linear-gradient(135deg, rgba(255, 255, 255, 0.9), rgba(255, 255, 255, 0.72));
+        border: 1px solid var(--line);
+      }
+
+      .step-num {
+        width: 56px;
+        height: 56px;
+        border-radius: 18px;
+        display: grid;
+        place-items: center;
+        color: white;
+        font-weight: 800;
+        font-size: 1.15rem;
+        background: linear-gradient(135deg, var(--accent), var(--accent-3));
+      }
+
+      .timeline-step:nth-child(2) .step-num {
+        background: linear-gradient(135deg, var(--accent-2), #0ea5e9);
+      }
+
+      .timeline-step:nth-child(3) .step-num {
+        background: linear-gradient(135deg, #8b5cf6, #ec4899);
+      }
+
+      .timeline-step h3 {
+        margin: 0 0 4px;
+      }
+
+      .timeline-step p {
+        margin: 0;
+        color: var(--muted);
+        line-height: 1.5;
+      }
+
+      .footer-note {
+        margin: 22px 0 0;
+        color: #dbeafe;
+        font-size: 0.95rem;
+      }
+
+      @media (max-width: 900px) {
+        .half,
+        .third {
+          grid-column: span 12;
+        }
+
+        .setup-grid,
+        .guess-controls {
+          grid-template-columns: 1fr;
+        }
+
+        .presenter-grid {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="shell">
+      <header class="hero">
+        <div>
+          <p class="kicker">Team Time</p>
+          <h1>A separate space for team rituals, check-ins, and quick collaboration.</h1>
+        </div>
+        <button id="viewToggleBtn" class="view-toggle" type="button">Switch to participant view</button>
+        <a class="view-toggle" href="?view=participant" target="_blank">Open participant view</a>
+        <div id="viewBadge" class="presenter-badge">Presenter screen</div>
+        <form id="presenterUnlockForm" class="presenter-unlock" hidden>
+          <label for="presenterUnlockInput">Presenter code</label>
+          <input id="presenterUnlockInput" type="password" autocomplete="current-password" />
+          <button type="submit">Unlock presenter</button>
+          <p id="unlockMessage" class="unlock-message" role="alert"></p>
+        </form>
+        <p class="subtitle">
+          This is a standalone page, separate from the meeting engagement strategy generator. The presenter can add
+          facts behind the scenes, while participants only see the current fact and the live word cloud.
+        </p>
+      </header>
+
+      <section class="grid" aria-label="Team Time layout">
+        <article class="card pad wide presenter-backstage">
+          <h2 class="section-title">Presenter backstage</h2>
+          <p class="section-copy">
+            Add facts one at a time and keep the full list hidden from participants. Choose the current fact when
+            you’re ready to reveal it.
+          </p>
+
+          <div class="presenter-grid" style="margin-top: 14px;">
+            <div class="card pad stack" style="background: rgba(255,255,255,0.6); box-shadow: none;">
+              <h3 class="section-title" style="margin-bottom: 0;">Facts and names</h3>
+              <div class="field-group">
+                <label for="factInput">Add a fact or clue</label>
+                <div class="field-row">
+                  <input id="factInput" type="text" placeholder="Example: Has led three product launches" />
+                  <button id="addFactBtn" type="button">Add fact</button>
+                </div>
+              </div>
+
+              <div class="field-group">
+                <label for="nameInput">Add a name</label>
+                <div class="field-row">
+                  <input id="nameInput" type="text" placeholder="Example: Jordan Lee" />
+                  <button id="addNameBtn" class="secondary" type="button">Add name</button>
+                </div>
+              </div>
+
+              <div class="presenter-toolbar">
+                <button id="prevFactBtn" type="button" class="secondary">Previous fact</button>
+                <button id="nextFactBtn" type="button">Next fact</button>
+                <button id="startRoundBtn" type="button" class="secondary">Start round</button>
+                <input id="presenterCodeInput" class="presenter-code-input" type="password" minlength="4" placeholder="Set presenter code" aria-label="Presenter code" />
+                <button id="setPresenterCodeBtn" type="button" class="secondary">Lock presenter</button>
+              </div>
+
+              <div id="factList" class="mini-list" aria-live="polite"></div>
+              <div id="nameList" class="mini-list" aria-live="polite"></div>
+            </div>
+          </div>
+        </article>
+
+        <article class="card pad wide participant-screen">
+          <div class="current-fact" style="margin-top: 14px;">
+            <p class="current-fact-label">Now showing</p>
+            <p id="currentFactText" class="current-fact-text">Add a fact to begin the round.</p>
+          </div>
+          <p class="note" style="margin-top: 12px;">
+            Choose the name that best matches the current fact, then add your guess to the live word cloud.
+          </p>
+          <div class="guess-wall" style="margin-top: 12px;">
+            <p class="note" id="cloudNote">Add a few facts and names to begin.</p>
+            <div id="guessCloud" class="cloud" aria-live="polite"></div>
+            <div class="guess-controls">
+              <select id="guessInput" aria-label="Choose a name" disabled>
+                <option value="">Add names to begin</option>
+              </select>
+              <button id="submitGuessBtn" type="button">Submit guess</button>
+            </div>
+          </div>
+        </article>
+      </section>
+
+      <p class="footer-note">
+        Team Time is intentionally separate from the meeting engagement strategy generator, so you can evolve it on its
+        own.
+      </p>
+    </main>
+
+    <script>
+      const state = {
+        facts: [],
+        names: [],
+        guesses: {},
+        activeFactIndex: 0,
+        roundStarted: false,
+        presenterCode: ""
+      };
+      const sessionKey = "teamTime.session.v1";
+
+      const factInput = document.getElementById("factInput");
+      const nameInput = document.getElementById("nameInput");
+      const guessInput = document.getElementById("guessInput");
+      const guessCloud = document.getElementById("guessCloud");
+      const cloudNote = document.getElementById("cloudNote");
+      const currentFactText = document.getElementById("currentFactText");
+      const viewToggleBtn = document.getElementById("viewToggleBtn");
+      const viewBadge = document.getElementById("viewBadge");
+      const presenterUnlockForm = document.getElementById("presenterUnlockForm");
+      const presenterUnlockInput = document.getElementById("presenterUnlockInput");
+      const unlockMessage = document.getElementById("unlockMessage");
+      const startRoundBtn = document.getElementById("startRoundBtn");
+      const presenterCodeInput = document.getElementById("presenterCodeInput");
+      const setPresenterCodeBtn = document.getElementById("setPresenterCodeBtn");
+      const factList = document.getElementById("factList");
+      const nameList = document.getElementById("nameList");
+
+      function normalize(value) {
+        return typeof value === "string" ? value.trim() : "";
+      }
+
+      function loadSession() {
+        try {
+          const saved = JSON.parse(localStorage.getItem(sessionKey));
+          if (!saved || typeof saved !== "object") return;
+          state.facts = Array.isArray(saved.facts) ? saved.facts : [];
+          state.names = Array.isArray(saved.names) ? saved.names : [];
+          state.guesses = saved.guesses && typeof saved.guesses === "object" ? saved.guesses : {};
+          state.activeFactIndex = Number.isInteger(saved.activeFactIndex) ? saved.activeFactIndex : 0;
+          state.roundStarted = saved.roundStarted === true;
+          state.presenterCode = typeof saved.presenterCode === "string" ? saved.presenterCode : "";
+          state.activeFactIndex = Math.min(Math.max(state.activeFactIndex, 0), Math.max(state.facts.length - 1, 0));
+        } catch {
+          // Start a fresh session when storage is unavailable or malformed.
+        }
+      }
+
+      function saveSession() {
+        localStorage.setItem(sessionKey, JSON.stringify(state));
+      }
+
+      function syncSession() {
+        saveSession();
+        render();
+      }
+
+      function activeFact() {
+        return state.facts[state.activeFactIndex] || null;
+      }
+
+      function renderGuessChoices() {
+        const fact = activeFact();
+        const selectedName = guessInput.value;
+        guessInput.innerHTML = "";
+
+        const placeholder = document.createElement("option");
+        placeholder.value = "";
+        placeholder.textContent = state.names.length ? "Choose a name" : "Add names to begin";
+        guessInput.appendChild(placeholder);
+
+        state.names.forEach((name) => {
+          const option = document.createElement("option");
+          option.value = name;
+          option.textContent = name;
+          option.selected = name === selectedName;
+          guessInput.appendChild(option);
+        });
+
+        const canGuess = Boolean(fact && state.names.length && state.roundStarted);
+        guessInput.disabled = !canGuess;
+        document.getElementById("submitGuessBtn").disabled = !canGuess;
+      }
+
+      function render() {
+        guessCloud.innerHTML = "";
+
+        factList.innerHTML = "";
+        nameList.innerHTML = "";
+
+        state.facts.forEach((fact, index) => {
+          const item = document.createElement("div");
+          item.className = "mini-entry";
+          const label = document.createElement("strong");
+          label.textContent = `${index + 1}. ${fact.text}`;
+          const actions = document.createElement("div");
+          actions.className = "mini-entry-actions";
+          const count = document.createElement("span");
+          count.textContent = `${state.guesses[fact.id]?.length || 0} guesses`;
+          const remove = document.createElement("button");
+          remove.type = "button";
+          remove.className = "delete-entry";
+          remove.textContent = "Delete";
+          remove.setAttribute("aria-label", `Delete fact: ${fact.text}`);
+          remove.addEventListener("click", () => deleteFact(index));
+          actions.append(count, remove);
+          item.append(label, actions);
+          factList.appendChild(item);
+        });
+
+        state.names.forEach((name, index) => {
+          const item = document.createElement("div");
+          item.className = "mini-entry";
+          const label = document.createElement("strong");
+          label.textContent = name;
+          const actions = document.createElement("div");
+          actions.className = "mini-entry-actions";
+          const status = document.createElement("span");
+          status.textContent = "Ready for guessing";
+          const remove = document.createElement("button");
+          remove.type = "button";
+          remove.className = "delete-entry";
+          remove.textContent = "Delete";
+          remove.setAttribute("aria-label", `Delete name: ${name}`);
+          remove.addEventListener("click", () => deleteName(index));
+          actions.append(status, remove);
+          item.append(label, actions);
+          nameList.appendChild(item);
+        });
+
+        startRoundBtn.disabled = !activeFact() || !state.names.length || state.roundStarted;
+        startRoundBtn.textContent = state.roundStarted ? "Round started" : "Start round";
+        setPresenterCodeBtn.textContent = state.presenterCode ? "Update code" : "Lock presenter";
+
+        renderGuessChoices();
+
+        if (!state.facts.length) {
+          currentFactText.textContent = "Add a fact to begin the round.";
+          cloudNote.textContent = "Add a fact and a name to begin.";
+          return;
+        }
+
+        const currentFact = activeFact();
+        currentFactText.textContent = currentFact ? currentFact.text : "Add a fact to begin the round.";
+        const guesses = currentFact ? state.guesses[currentFact.id] || [] : [];
+        cloudNote.textContent = currentFact
+          ? `Active fact: ${currentFact.text}`
+          : "Pick a fact to start the round.";
+
+        if (!guesses.length) {
+          const empty = document.createElement("div");
+          empty.className = "mini-entry";
+          empty.innerHTML = "<strong>No guesses yet</strong><span>Submit one to build the cloud</span>";
+          guessCloud.appendChild(empty);
+          return;
+        }
+
+        const counts = guesses.reduce((map, guess) => {
+          map[guess] = (map[guess] || 0) + 1;
+          return map;
+        }, {});
+
+        Object.entries(counts)
+          .sort((a, b) => b[1] - a[1])
+          .forEach(([name, count]) => {
+            const chip = document.createElement("span");
+            chip.className = "chip";
+            chip.style.fontSize = `${0.9 + Math.min(count, 5) * 0.12}rem`;
+            chip.textContent = `${name} ×${count}`;
+            guessCloud.appendChild(chip);
+          });
+      }
+
+      document.getElementById("addFactBtn").addEventListener("click", () => {
+        const text = normalize(factInput.value);
+        if (!text) return;
+        state.facts.push({ id: `fact-${Date.now()}-${Math.random().toString(16).slice(2)}`, text });
+        state.activeFactIndex = state.facts.length - 1;
+        state.roundStarted = false;
+        factInput.value = "";
+        syncSession();
+      });
+
+      document.getElementById("addNameBtn").addEventListener("click", () => {
+        const text = normalize(nameInput.value);
+        if (!text) return;
+        state.names.push(text);
+        nameInput.value = "";
+        syncSession();
+      });
+
+      function deleteFact(index) {
+        const [removedFact] = state.facts.splice(index, 1);
+        if (!removedFact) return;
+        delete state.guesses[removedFact.id];
+        if (!state.facts.length) {
+          state.activeFactIndex = 0;
+        } else if (index < state.activeFactIndex) {
+          state.activeFactIndex -= 1;
+        } else if (state.activeFactIndex >= state.facts.length) {
+          state.activeFactIndex = state.facts.length - 1;
+        }
+        state.roundStarted = false;
+        syncSession();
+      }
+
+      function deleteName(index) {
+        const [removedName] = state.names.splice(index, 1);
+        if (!removedName) return;
+        Object.values(state.guesses).forEach((guesses) => {
+          const retained = guesses.filter((guess) => guess !== removedName);
+          guesses.splice(0, guesses.length, ...retained);
+        });
+        syncSession();
+      }
+
+      document.getElementById("prevFactBtn").addEventListener("click", () => {
+        if (!state.facts.length) return;
+        state.activeFactIndex = (state.activeFactIndex - 1 + state.facts.length) % state.facts.length;
+        state.roundStarted = false;
+        syncSession();
+      });
+
+      document.getElementById("nextFactBtn").addEventListener("click", () => {
+        if (!state.facts.length) return;
+        state.activeFactIndex = (state.activeFactIndex + 1) % state.facts.length;
+        state.roundStarted = false;
+        syncSession();
+      });
+
+      startRoundBtn.addEventListener("click", () => {
+        if (!activeFact() || !state.names.length) return;
+        state.roundStarted = true;
+        syncSession();
+      });
+
+      setPresenterCodeBtn.addEventListener("click", () => {
+        const code = normalize(presenterCodeInput.value);
+        if (code.length < 4) {
+          presenterCodeInput.focus();
+          return;
+        }
+        state.presenterCode = code;
+        presenterCodeInput.value = "";
+        syncSession();
+      });
+
+      document.getElementById("submitGuessBtn").addEventListener("click", () => {
+        const fact = activeFact();
+        const guess = normalize(guessInput.value);
+        if (!fact || !guess || !state.roundStarted) return;
+        if (!state.guesses[fact.id]) state.guesses[fact.id] = [];
+        state.guesses[fact.id].push(guess);
+        guessInput.value = "";
+        syncSession();
+      });
+
+      window.addEventListener("storage", (event) => {
+        if (event.key !== sessionKey) return;
+        loadSession();
+        render();
+      });
+
+      function setViewMode(audienceMode, updateUrl = false) {
+        document.body.classList.toggle("audience-mode", audienceMode);
+        viewToggleBtn.textContent = audienceMode ? "Switch to presenter view" : "Switch to participant view";
+        viewBadge.textContent = audienceMode ? "Participant screen" : "Presenter screen";
+        presenterUnlockForm.hidden = true;
+        presenterUnlockInput.value = "";
+        unlockMessage.textContent = "";
+        if (updateUrl) {
+          const url = new URL(window.location.href);
+          if (audienceMode) {
+            url.searchParams.set("view", "participant");
+          } else {
+            url.searchParams.delete("view");
+          }
+          window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
+        }
+        render();
+      }
+
+      viewToggleBtn.addEventListener("click", () => {
+        const audienceMode = document.body.classList.contains("audience-mode");
+        if (audienceMode && state.presenterCode) {
+          presenterUnlockForm.hidden = false;
+          presenterUnlockInput.focus();
+          return;
+        }
+        setViewMode(!audienceMode, true);
+      });
+
+      presenterUnlockForm.addEventListener("submit", (event) => {
+        event.preventDefault();
+        if (presenterUnlockInput.value !== state.presenterCode) {
+          unlockMessage.textContent = "That code does not unlock presenter view.";
+          presenterUnlockInput.select();
+          return;
+        }
+        setViewMode(false, true);
+      });
+
+      loadSession();
+      setViewMode(new URLSearchParams(window.location.search).get("view") === "participant");
+    </script>
+  </body>
+</html>

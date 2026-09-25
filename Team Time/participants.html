@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Team Time | Participant View</title>
+    <style>
+      :root {
+        --ink: #102033;
+        --muted: #4d647c;
+        --line: rgba(16, 32, 51, 0.12);
+        --accent: #f59e0b;
+        --panel: rgba(255, 255, 255, 0.92);
+        --shadow: 0 20px 50px rgba(0, 0, 0, 0.24);
+      }
+
+      * { box-sizing: border-box; }
+
+      body {
+        min-height: 100vh;
+        margin: 0;
+        color: var(--ink);
+        font-family: Inter, "Segoe UI", Helvetica, Arial, sans-serif;
+        background:
+          radial-gradient(circle at top left, rgba(236, 72, 153, 0.24), transparent 30%),
+          radial-gradient(circle at top right, rgba(245, 158, 11, 0.24), transparent 26%),
+          linear-gradient(145deg, #111827, #1d4ed8 55%, #0f766e);
+      }
+
+      main {
+        width: min(760px, calc(100vw - 32px));
+        margin: 48px auto;
+      }
+
+      header { color: #f8fbff; }
+      .kicker {
+        margin: 0 0 8px;
+        color: #dbeafe;
+        font-size: 0.76rem;
+        font-weight: 700;
+        letter-spacing: 0.2em;
+        text-transform: uppercase;
+      }
+      h1 { margin: 0; font-size: clamp(2rem, 5vw, 3.5rem); line-height: 1; }
+      .subtitle { margin: 14px 0 0; color: #dbeafe; line-height: 1.55; }
+
+      .card {
+        margin-top: 24px;
+        padding: 24px;
+        border: 1px solid rgba(255, 255, 255, 0.34);
+        border-radius: 16px;
+        background: var(--panel);
+        box-shadow: var(--shadow);
+        backdrop-filter: blur(10px);
+      }
+
+      .current-fact {
+        padding: 18px;
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        background: linear-gradient(135deg, #fff7ed, #e0f2fe);
+      }
+      .fact-label {
+        margin: 0;
+        color: #6b7280;
+        font-size: 0.75rem;
+        font-weight: 800;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+      }
+      .fact-text { margin: 10px 0 0; font-size: clamp(1.25rem, 3vw, 1.8rem); font-weight: 800; line-height: 1.2; }
+      .round-status {
+        display: inline-flex;
+        margin-top: 14px;
+        padding: 6px 10px;
+        border: 1px solid #f59e0b;
+        border-radius: 999px;
+        color: #92400e;
+        font-size: 0.85rem;
+        font-weight: 800;
+        background: #fef3c7;
+      }
+      .round-status.started { border-color: #16a34a; color: #166534; background: #dcfce7; }
+      .note { margin: 18px 0 0; color: var(--muted); line-height: 1.5; }
+      .cloud { display: flex; flex-wrap: wrap; gap: 10px; min-height: 76px; margin-top: 16px; }
+      .chip {
+        display: inline-flex;
+        align-items: center;
+        padding: 10px 14px;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        background: linear-gradient(135deg, #fff7ed, #e0f2fe);
+        color: #13213a;
+        font-weight: 700;
+      }
+      .empty { width: 100%; padding: 14px; border: 1px solid var(--line); border-radius: 10px; color: var(--muted); }
+      .guess-controls { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; margin-top: 18px; }
+      select, button { min-height: 48px; border-radius: 10px; font: inherit; }
+      select { width: 100%; padding: 0 12px; border: 1px solid rgba(16, 32, 51, 0.18); color: var(--ink); background: #fff; }
+      button { border: 0; padding: 0 18px; color: var(--ink); font-weight: 800; cursor: pointer; background: linear-gradient(135deg, var(--accent), #ffd166); box-shadow: 0 12px 24px rgba(245, 158, 11, 0.22); }
+      button:disabled, select:disabled { cursor: not-allowed; opacity: 0.55; }
+      @media (max-width: 560px) { main { margin: 24px auto; } .card { padding: 18px; } .guess-controls { grid-template-columns: 1fr; } button { width: 100%; } }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <p class="kicker">Team Time</p>
+        <h1>Make your guess</h1>
+        <p class="subtitle">Choose the teammate who best matches the current fact.</p>
+      </header>
+
+      <section class="card" aria-label="Participant guessing area">
+        <div class="current-fact">
+          <p class="fact-label">Now showing</p>
+          <p id="currentFactText" class="fact-text">Waiting for the presenter to start a round.</p>
+          <p id="roundStatus" class="round-status">Waiting for presenter</p>
+        </div>
+        <p id="cloudNote" class="note">The live word cloud will appear here.</p>
+        <div id="guessCloud" class="cloud" aria-live="polite"></div>
+        <div class="guess-controls">
+          <select id="guessInput" aria-label="Choose a name" disabled></select>
+          <button id="submitGuessBtn" type="button" disabled>Submit guess</button>
+        </div>
+      </section>
+    </main>
+
+    <script>
+      const sessionKey = "teamTime.session.v1";
+      const state = { facts: [], names: [], guesses: {}, activeFactIndex: 0, roundStarted: false };
+      const currentFactText = document.getElementById("currentFactText");
+      const roundStatus = document.getElementById("roundStatus");
+      const cloudNote = document.getElementById("cloudNote");
+      const guessCloud = document.getElementById("guessCloud");
+      const guessInput = document.getElementById("guessInput");
+      const submitGuessBtn = document.getElementById("submitGuessBtn");
+
+      function loadSession() {
+        try {
+          const saved = JSON.parse(localStorage.getItem(sessionKey));
+          if (!saved || typeof saved !== "object") return;
+          state.facts = Array.isArray(saved.facts) ? saved.facts : [];
+          state.names = Array.isArray(saved.names) ? saved.names : [];
+          state.guesses = saved.guesses && typeof saved.guesses === "object" ? saved.guesses : {};
+          state.activeFactIndex = Number.isInteger(saved.activeFactIndex) ? saved.activeFactIndex : 0;
+          state.roundStarted = saved.roundStarted === true;
+          state.activeFactIndex = Math.min(Math.max(state.activeFactIndex, 0), Math.max(state.facts.length - 1, 0));
+        } catch {
+          // The page remains usable when no valid presenter session exists yet.
+        }
+      }
+
+      function activeFact() {
+        return state.facts[state.activeFactIndex] || null;
+      }
+
+      function addEmptyMessage(text) {
+        const empty = document.createElement("p");
+        empty.className = "empty";
+        empty.textContent = text;
+        guessCloud.appendChild(empty);
+      }
+
+      function render() {
+        const fact = activeFact();
+        const selectedName = guessInput.value;
+        guessInput.innerHTML = "";
+        const placeholder = document.createElement("option");
+        placeholder.value = "";
+        placeholder.textContent = state.names.length ? "Choose a name" : "Waiting for names";
+        guessInput.appendChild(placeholder);
+        state.names.forEach((name) => {
+          const option = document.createElement("option");
+          option.value = name;
+          option.textContent = name;
+          option.selected = name === selectedName;
+          guessInput.appendChild(option);
+        });
+        const isReady = Boolean(fact && state.names.length && state.roundStarted);
+        guessInput.disabled = !isReady;
+        submitGuessBtn.disabled = !isReady;
+
+        guessCloud.innerHTML = "";
+        if (!fact) {
+          currentFactText.textContent = "Waiting for the presenter to start a round.";
+          roundStatus.textContent = "Waiting for presenter";
+          roundStatus.classList.remove("started");
+          cloudNote.textContent = "The live word cloud will appear here.";
+          addEmptyMessage("No active fact yet.");
+          return;
+        }
+
+        currentFactText.textContent = fact.text;
+  roundStatus.textContent = state.roundStarted ? "Round started" : "Waiting for presenter";
+  roundStatus.classList.toggle("started", state.roundStarted);
+        cloudNote.textContent = state.roundStarted ? "See what the group is thinking." : "The presenter will start the round shortly.";
+        const guesses = state.guesses[fact.id] || [];
+        if (!state.roundStarted) {
+          addEmptyMessage("Waiting for the presenter to start the round.");
+          return;
+        }
+        if (!guesses.length) {
+          addEmptyMessage("No guesses yet. Be the first to choose.");
+          return;
+        }
+
+        const counts = guesses.reduce((totals, guess) => {
+          totals[guess] = (totals[guess] || 0) + 1;
+          return totals;
+        }, {});
+        Object.entries(counts).sort((left, right) => right[1] - left[1]).forEach(([name, count]) => {
+          const chip = document.createElement("span");
+          chip.className = "chip";
+          chip.style.fontSize = `${0.9 + Math.min(count, 5) * 0.12}rem`;
+          chip.textContent = `${name} x${count}`;
+          guessCloud.appendChild(chip);
+        });
+      }
+
+      submitGuessBtn.addEventListener("click", () => {
+        const fact = activeFact();
+        const guess = guessInput.value;
+        if (!fact || !guess || !state.roundStarted) return;
+        if (!state.guesses[fact.id]) state.guesses[fact.id] = [];
+        state.guesses[fact.id].push(guess);
+        localStorage.setItem(sessionKey, JSON.stringify(state));
+        guessInput.value = "";
+        render();
+      });
+
+      window.addEventListener("storage", (event) => {
+        if (event.key !== sessionKey) return;
+        loadSession();
+        render();
+      });
+
+      loadSession();
+      render();
+    </script>
+  </body>
+</html>
