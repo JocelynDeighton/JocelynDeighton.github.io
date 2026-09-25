@@ -4,6 +4,8 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Team Time</title>
+    <script src="https://unpkg.com/peerjs@1.5.5/dist/peerjs.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
     <style>
       :root {
         --bg-a: #111827;
@@ -404,6 +406,34 @@
         font: inherit;
       }
 
+      .multiplayer-panel {
+        display: grid;
+        gap: 12px;
+        padding: 16px;
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        background: rgba(255, 255, 255, 0.72);
+      }
+
+      .multiplayer-panel h3,
+      .multiplayer-panel p { margin: 0; }
+
+      .multiplayer-panel button {
+        width: fit-content;
+        border: 0;
+        border-radius: 10px;
+        padding: 10px 14px;
+        color: var(--ink);
+        font: inherit;
+        font-weight: 800;
+        cursor: pointer;
+        background: linear-gradient(135deg, var(--accent), #ffd166);
+      }
+
+      .multiplayer-link[hidden] { display: none; }
+      .multiplayer-link input { min-width: 0; }
+      #qrCode { width: fit-content; padding: 8px; background: white; }
+
       .guess-controls {
         display: grid;
         grid-template-columns: minmax(0, 1fr) auto;
@@ -577,6 +607,19 @@
                 <button id="setPresenterCodeBtn" type="button" class="secondary">Lock presenter</button>
               </div>
 
+              <section class="multiplayer-panel" aria-label="Multiplayer game">
+                <h3>Present to participants</h3>
+                <button id="createGameBtn" type="button">Create game</button>
+                <div id="multiplayerLink" class="multiplayer-link" hidden>
+                  <label for="participantLink">Participant link</label>
+                  <div class="field-row">
+                    <input id="participantLink" type="url" readonly />
+                    <button id="copyLinkBtn" type="button">Copy link</button>
+                  </div>
+                  <div id="qrCode" aria-label="QR code for participant link"></div>
+                </div>
+              </section>
+
               <div id="factList" class="mini-list" aria-live="polite"></div>
               <div id="nameList" class="mini-list" aria-live="polite"></div>
             </div>
@@ -584,6 +627,7 @@
         </article>
 
         <article class="card pad wide participant-screen">
+          <p id="connectionStatus" class="note" role="status">Create a game to generate a participant link.</p>
           <div class="current-fact" style="margin-top: 14px;">
             <p class="current-fact-label">Now showing</p>
             <p id="currentFactText" class="current-fact-text">Add a fact to begin the round.</p>
@@ -637,6 +681,18 @@
       const setPresenterCodeBtn = document.getElementById("setPresenterCodeBtn");
       const factList = document.getElementById("factList");
       const nameList = document.getElementById("nameList");
+      const connectionStatus = document.getElementById("connectionStatus");
+      const createGameBtn = document.getElementById("createGameBtn");
+      const multiplayerLink = document.getElementById("multiplayerLink");
+      const participantLink = document.getElementById("participantLink");
+      const qrCode = document.getElementById("qrCode");
+      const query = new URLSearchParams(window.location.search);
+      const gameId = query.get("game");
+      const remoteParticipant = query.get("view") === "participant" && Boolean(gameId);
+      let peer = null;
+      let peerConnections = new Map();
+      let presenterConnection = null;
+      let connectedToPresenter = false;
 
       function normalize(value) {
         return typeof value === "string" ? value.trim() : "";
@@ -665,6 +721,125 @@
       function syncSession() {
         saveSession();
         render();
+        broadcastSession();
+      }
+
+      function publicSession() {
+        return {
+          facts: state.facts,
+          names: state.names,
+          guesses: state.guesses,
+          activeFactIndex: state.activeFactIndex,
+          roundStarted: state.roundStarted
+        };
+      }
+
+      function broadcastSession() {
+        const message = { type: "session", state: publicSession() };
+        peerConnections.forEach((connection) => {
+          if (connection.open) connection.send(message);
+        });
+      }
+
+      function applyRemoteSession(session) {
+        if (!session || typeof session !== "object") return;
+        state.facts = Array.isArray(session.facts) ? session.facts : [];
+        state.names = Array.isArray(session.names) ? session.names : [];
+        state.guesses = session.guesses && typeof session.guesses === "object" ? session.guesses : {};
+        state.activeFactIndex = Number.isInteger(session.activeFactIndex) ? session.activeFactIndex : 0;
+        state.activeFactIndex = Math.min(Math.max(state.activeFactIndex, 0), Math.max(state.facts.length - 1, 0));
+        state.roundStarted = session.roundStarted === true;
+        render();
+      }
+
+      function handleParticipantMessage(message) {
+        if (!message || message.type !== "guess" || typeof message.guess !== "string") return;
+        const guess = normalize(message.guess);
+        const fact = activeFact();
+        if (!fact || !state.roundStarted || !state.names.includes(guess)) return;
+        if (!state.guesses[fact.id]) state.guesses[fact.id] = [];
+        state.guesses[fact.id].push(guess);
+        syncSession();
+      }
+
+      function connectParticipant(connection) {
+        peerConnections.set(connection.peer, connection);
+        connection.on("data", (message) => handleParticipantMessage(message));
+        connection.on("close", () => {
+          peerConnections.delete(connection.peer);
+          connectionStatus.textContent = `${peerConnections.size} participant${peerConnections.size === 1 ? "" : "s"} connected.`;
+        });
+        connection.on("open", () => {
+          connection.send({ type: "session", state: publicSession() });
+          connectionStatus.textContent = `${peerConnections.size} participant${peerConnections.size === 1 ? "" : "s"} connected.`;
+        });
+      }
+
+      function createGame() {
+        if (!window.Peer) {
+          connectionStatus.textContent = "PeerJS could not load. Check your internet connection and reload.";
+          return;
+        }
+        createGameBtn.disabled = true;
+        connectionStatus.textContent = "Creating a peer-to-peer game...";
+        peer = new Peer();
+        peer.on("open", (id) => {
+          const url = new URL(window.location.href);
+          url.searchParams.set("view", "participant");
+          url.searchParams.set("game", id);
+          participantLink.value = url.toString();
+          multiplayerLink.hidden = false;
+          qrCode.innerHTML = "";
+          try {
+            const code = window.qrcode(0, "M");
+            code.addData(participantLink.value);
+            code.make();
+            const image = document.createElement("img");
+            image.src = code.createDataURL(3, 2);
+            image.alt = "Scan to join this Team Time game";
+            qrCode.appendChild(image);
+            connectionStatus.textContent = "Game is ready. Share the link or scan the QR code to join.";
+          } catch {
+            connectionStatus.textContent = "Game is ready. Copy the participant link to invite others.";
+          }
+        });
+        peer.on("connection", connectParticipant);
+        peer.on("error", (error) => {
+          connectionStatus.textContent = `Connection error: ${error.type || "unable to connect"}.`;
+          createGameBtn.disabled = false;
+        });
+      }
+
+      function joinGame() {
+        document.body.classList.add("audience-mode");
+        if (!window.Peer) {
+          connectionStatus.textContent = "PeerJS could not load. Check your internet connection and reload.";
+          return;
+        }
+        connectionStatus.textContent = "Connecting to the presenter...";
+        peer = new Peer();
+        peer.on("open", () => {
+          presenterConnection = peer.connect(gameId, { reliable: true });
+          presenterConnection.on("open", () => {
+            connectedToPresenter = true;
+            connectionStatus.textContent = "Connected to the presenter.";
+            render();
+          });
+          presenterConnection.on("data", (message) => {
+            if (message && message.type === "session") applyRemoteSession(message.state);
+          });
+          presenterConnection.on("close", () => {
+            connectedToPresenter = false;
+            connectionStatus.textContent = "Presenter connection closed.";
+            render();
+          });
+          presenterConnection.on("error", () => {
+            connectionStatus.textContent = "Could not connect to the presenter. Reopen the participant link.";
+          });
+        });
+        peer.on("error", (error) => {
+          connectionStatus.textContent = `Connection error: ${error.type || "unable to connect"}.`;
+        });
       }
 
       function activeFact() {
@@ -689,7 +864,7 @@
           guessInput.appendChild(option);
         });
 
-        const canGuess = Boolean(fact && state.names.length && state.roundStarted);
+        const canGuess = Boolean(fact && state.names.length && state.roundStarted && (!remoteParticipant || connectedToPresenter));
         guessInput.disabled = !canGuess;
         document.getElementById("submitGuessBtn").disabled = !canGuess;
       }
@@ -861,10 +1036,26 @@
         const fact = activeFact();
         const guess = normalize(guessInput.value);
         if (!fact || !guess || !state.roundStarted) return;
+        if (remoteParticipant) {
+          if (presenterConnection && presenterConnection.open) presenterConnection.send({ type: "guess", guess });
+          guessInput.value = "";
+          return;
+        }
         if (!state.guesses[fact.id]) state.guesses[fact.id] = [];
         state.guesses[fact.id].push(guess);
         guessInput.value = "";
         syncSession();
+      });
+
+      createGameBtn.addEventListener("click", createGame);
+      document.getElementById("copyLinkBtn").addEventListener("click", async () => {
+        try {
+          await navigator.clipboard.writeText(participantLink.value);
+          connectionStatus.textContent = "Participant link copied.";
+        } catch {
+          participantLink.select();
+          connectionStatus.textContent = "Select and copy the participant link.";
+        }
       });
 
       window.addEventListener("storage", (event) => {
@@ -914,6 +1105,14 @@
 
       loadSession();
       setViewMode(new URLSearchParams(window.location.search).get("view") === "participant");
+      if (remoteParticipant) {
+        state.facts = [];
+        state.names = [];
+        state.guesses = {};
+        state.activeFactIndex = 0;
+        state.roundStarted = false;
+        joinGame();
+      }
     </script>
   </body>
 </html>
